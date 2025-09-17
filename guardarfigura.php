@@ -10,23 +10,21 @@ try {
     $pdo = new PDO('sqlite:' . $dbPath);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    // Crear la tabla si no existe
+    // Crear la tabla si no existe (con columna descripcion)
     $createSql = <<<SQL
     CREATE TABLE IF NOT EXISTS Figuras (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nombre TEXT NOT NULL,
       tipo TEXT NOT NULL,
-      color TEXT,
-      tamano REAL,
-      material TEXT,
-      precio REAL
+      precio REAL,
+      descripcion TEXT
     );
     SQL;
     $pdo->exec($createSql);
 
     // --- Manejo de GET?action=list -> devolver lista de figuras ---
     if (isset($_GET['action']) && $_GET['action'] === 'list' && $_SERVER['REQUEST_METHOD'] === 'GET') {
-        $rows = $pdo->query('SELECT id, nombre, tipo, color, tamano, material, precio FROM Figuras ORDER BY id DESC')->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $pdo->query('SELECT id as codigo, nombre as Nombre, tipo as Categoria, precio as Precio, descripcion as Descripcion FROM Figuras ORDER BY id DESC')->fetchAll(PDO::FETCH_ASSOC);
         echo json_encode(['success' => true, 'data' => $rows], JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -38,8 +36,8 @@ try {
             throw new Exception('JSON inválido o no se recibieron datos.');
         }
 
-        // Campos esperados
-        $expected = ['nombre','tipo','color','tamano','material','precio'];
+        // Campos esperados según formulario
+        $expected = ['Nombre','Categoria','Precio','Descripcion'];
         foreach ($expected as $field) {
             if (!array_key_exists($field, $input)) {
                 throw new Exception("Falta el campo: {$field}");
@@ -47,50 +45,23 @@ try {
         }
 
         // Normalizar datos
-        $nombre   = trim($input['nombre']);
-        $tipo     = trim($input['tipo']);
-        $color    = trim($input['color']);
-        $tamano   = ($input['tamano'] === '' || $input['tamano'] === null) ? null : floatval($input['tamano']);
-        $material = trim($input['material']);
-        $precio   = ($input['precio'] === '' || $input['precio'] === null) ? null : floatval($input['precio']);
+        $nombre   = trim($input['Nombre']);
+        $tipo     = trim($input['Categoria']);
+        $precio   = ($input['Precio'] === '' || $input['Precio'] === null) ? null : floatval($input['Precio']);
+        $descripcion = trim($input['Descripcion']);
 
         // Validaciones básicas
         if ($nombre === '' || $tipo === '') {
-            throw new Exception('Nombre y tipo son obligatorios.');
+            throw new Exception('Nombre y Categoría son obligatorios.');
         }
 
         // Preparar INSERT
-        $sql = 'INSERT INTO Figuras (
-                    nombre,
-                    tipo,
-                    color,
-                    tamano,
-                    material,
-                    precio
-                ) VALUES (
-                    :nombre,
-                    :tipo,
-                    :color,
-                    :tamano,
-                    :material,
-                    :precio
-                )';
+        $sql = 'INSERT INTO Figuras (nombre, tipo, precio, descripcion) VALUES (:nombre, :tipo, :precio, :descripcion)';
         $stmt = $pdo->prepare($sql);
-
         $stmt->bindValue(':nombre', $nombre, PDO::PARAM_STR);
         $stmt->bindValue(':tipo', $tipo, PDO::PARAM_STR);
-        $stmt->bindValue(':color', $color !== '' ? $color : null, PDO::PARAM_STR);
-        if ($tamano === null) {
-            $stmt->bindValue(':tamano', null, PDO::PARAM_NULL);
-        } else {
-            $stmt->bindValue(':tamano', $tamano);
-        }
-        $stmt->bindValue(':material', $material !== '' ? $material : null, PDO::PARAM_STR);
-        if ($precio === null) {
-            $stmt->bindValue(':precio', null, PDO::PARAM_NULL);
-        } else {
-            $stmt->bindValue(':precio', $precio);
-        }
+        $stmt->bindValue(':precio', $precio !== null ? $precio : null, $precio !== null ? PDO::PARAM_STR : PDO::PARAM_NULL);
+        $stmt->bindValue(':descripcion', $descripcion !== '' ? $descripcion : null, $descripcion !== '' ? PDO::PARAM_STR : PDO::PARAM_NULL);
 
         $stmt->execute();
         $lastId = $pdo->lastInsertId();
